@@ -1,25 +1,25 @@
-import React, { useState, useCallback } from "react" // Added useCallback
+import React, { useState, useCallback } from "react"
 import { View, Text, StyleSheet, ScrollView, Alert, RefreshControl } from "react-native"
 import { router } from "expo-router"
 import GradientContainer from "../components/ui/GradientContainer"
 import StatusBar from "../components/ui/StatusBar"
 import Button from "../components/ui/Button"
 import Avatar from "../components/ui/Avatar"
-import FirebaseDebugger from "../debug/FirebaseDebugger"
-import PaymentModal from "../components/PaymentModal" // Import PaymentModal
+
+import PaymentModal from "../components/PaymentModal"
 import { useAuth } from "../context/AuthContext"
 import useQueue from "../hooks/useQueue"
-import useMatching from "../hooks/useMatching" // Import useMatching
+import useMatching from "../hooks/useMatching"
 import { theme } from "../config/theme"
 import { __DEV__ } from "react-native"
 
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false)
-  const [showDebugger, setShowDebugger] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false) 
+ 
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const { userInfo, signOutUser } = useAuth()
   const { queueStats, loading, refreshStats } = useQueue()
-  const { startMatching, isMatching, stopMatching } = useMatching() 
+  const { startMatching, isMatching, stopMatching } = useMatching()
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -27,61 +27,47 @@ export default function DashboardScreen() {
     setRefreshing(false)
   }, [refreshStats])
 
-  // Handles "Vent Now" button press
   const handleVentNow = useCallback(() => {
-    // Check if user is logged in before showing payment modal
     if (!userInfo?.uid) {
       Alert.alert("Authentication Required", "Please sign in to vent.")
       return
     }
-    setShowPaymentModal(true) // Open the payment modal
+    setShowPaymentModal(true)
   }, [userInfo])
 
-  
-  const handlePaymentSuccess = useCallback(async (selectedPlan) => {
-    setShowPaymentModal(false) 
+  const handlePaymentSuccess = useCallback(
+    async (selectedPlan) => {
+      setShowPaymentModal(false)
 
-    if (!userInfo?.uid) {
-      Alert.alert("Error", "User not logged in. Please try again.")
-      return
-    }
-
-    try {
-      Alert.alert("Starting Vent Session", "Finding a listener for you...")
-
-
-      const ventTextPlaceholder = "The user has started a venting session."
-      const success = await startMatching("venter", ventTextPlaceholder, selectedPlan) // Pass selectedPlan
-      if (!success) {
-        Alert.alert("Matching Failed", "Could not start your venting session. Please try again.")
+      if (!userInfo?.uid) {
+        Alert.alert("Error", "User not logged in. Please try again.")
+        return
       }
-      // If success, useMatching hook will handle navigation to VoiceCall
-    } catch (error) {
-      console.error("Error during venter matching:", error)
-      Alert.alert("Error", "Failed to start vent session. Please try again.")
-      stopMatching() // Ensure matching is stopped on error
-    }
-  }, [userInfo, startMatching, stopMatching])
 
-  // Handles "Be a Listener" button press
+      try {
+        Alert.alert("Starting Vent Session", "Finding a listener for you...")
+
+        router.push({
+          pathname: "/vent-submitted",
+          params: { selectedPlan: selectedPlan.name },
+        })
+      } catch (error) {
+        console.error("Error during venter matching:", error)
+        Alert.alert("Error", "Failed to start vent session. Please try again.")
+        stopMatching()
+      }
+    },
+    [userInfo, stopMatching],
+  )
+
   const handleBeListener = useCallback(async () => {
     if (!userInfo?.uid) {
       Alert.alert("Authentication Required", "Please sign in to be a listener.")
       return
     }
-    try {
-      Alert.alert("Joining Listener Queue", "Finding a venter for you...")
-      const success = await startMatching("listener")
-      if (!success) {
-        Alert.alert("Matching Failed", "Could not join listener queue. Please try again.")
-      }
-      // If success, useMatching hook will handle navigation to VoiceCall
-    } catch (error) {
-      console.error("Error during listener matching:", error)
-      Alert.alert("Error", "Failed to start listening. Please try again.")
-      stopMatching() // Ensure matching is stopped on error
-    }
-  }, [userInfo, startMatching, stopMatching])
+
+    router.push("/listener")
+  }, [userInfo])
 
   const handleSignOut = useCallback(() => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -94,33 +80,18 @@ export default function DashboardScreen() {
             router.replace("/")
           } catch (error) {
             Alert.alert("Error", "Failed to sign out")
-            console.error("Sign out error:", error) // Log the actual error
+            console.error("Sign out error:", error)
           }
         },
       },
     ])
   }, [signOutUser])
 
-  // Show loading indicator or disable buttons while matching
-  const disableButtons = isMatching || loading;
+  const disableButtons = isMatching || loading
 
   return (
     <GradientContainer>
       <StatusBar />
-
-      {/* Debug Tools - Only in development */}
-      {__DEV__ && (
-        <View style={styles.debugContainer}>
-          <Button
-            title={showDebugger ? "Hide Debug" : "Show Debug"}
-            onPress={() => setShowDebugger(!showDebugger)}
-            variant="outline"
-            style={styles.debugButton}
-          />
-        </View>
-      )}
-
-      <FirebaseDebugger visible={showDebugger} />
 
       <ScrollView
         style={styles.container}
@@ -131,7 +102,6 @@ export default function DashboardScreen() {
           <Avatar emoji="💭" size={60} />
           <View style={styles.userInfo}>
             <Text style={styles.welcomeText}>Welcome back!</Text>
-            {/* Added optional chaining for userInfo */}
             <Text style={styles.userText}>
               {userInfo?.isAnonymous ? "Anonymous User" : userInfo?.displayName || "Loading User..."}
             </Text>
@@ -167,7 +137,7 @@ export default function DashboardScreen() {
             buttonTitle={isMatching ? "Finding Match..." : "Vent Now"}
             onPress={handleVentNow}
             variant="primary"
-            disabled={disableButtons} // Disable button when matching
+            disabled={disableButtons}
           />
 
           <ActionCard
@@ -177,7 +147,7 @@ export default function DashboardScreen() {
             buttonTitle={isMatching ? "Finding Match..." : "Start Listening"}
             onPress={handleBeListener}
             variant="secondary"
-            disabled={disableButtons} // Disable button when matching
+            disabled={disableButtons}
           />
         </View>
 
@@ -193,7 +163,6 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* Payment Modal integrated here */}
       <PaymentModal
         visible={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}

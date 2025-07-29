@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect, useRef, useCallback } from "react"
 
 const useTimer = (initialDuration, onTimeUp) => {
@@ -8,16 +6,19 @@ const useTimer = (initialDuration, onTimeUp) => {
   const [isActive, setIsActive] = useState(false)
   const intervalRef = useRef(null)
   const startTimeRef = useRef(null)
+  const isMountedRef = useRef(true)
 
   const startTimer = useCallback(() => {
-    if (!isActive) {
+    if (!isActive && isMountedRef.current) {
       setIsActive(true)
       startTimeRef.current = Date.now() - sessionTime * 1000
     }
   }, [isActive, sessionTime])
 
   const stopTimer = useCallback(() => {
-    setIsActive(false)
+    if (isMountedRef.current) {
+      setIsActive(false)
+    }
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
@@ -25,8 +26,13 @@ const useTimer = (initialDuration, onTimeUp) => {
   }, [])
 
   useEffect(() => {
-    if (isActive) {
+    if (isActive && isMountedRef.current) {
       intervalRef.current = setInterval(() => {
+        if (!isMountedRef.current) {
+          clearInterval(intervalRef.current)
+          return
+        }
+
         const now = Date.now()
         const elapsed = Math.floor((now - startTimeRef.current) / 1000)
 
@@ -55,8 +61,12 @@ const useTimer = (initialDuration, onTimeUp) => {
   }, [isActive, initialDuration, onTimeUp, stopTimer])
 
   useEffect(() => {
+    isMountedRef.current = true
     startTimer()
-    return () => stopTimer()
+    return () => {
+      isMountedRef.current = false
+      stopTimer()
+    }
   }, [])
 
   return { sessionTime, timeRemaining, isActive, startTimer, stopTimer }

@@ -1,67 +1,94 @@
-import { useState, useCallback } from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from "react-native"; 
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import Button from "./ui/Button";
-import { theme } from "../config/theme";
-import { PLANS } from "../utils/constants";
+import { useState, useCallback } from "react"
+import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert } from "react-native"
+import { Ionicons } from "@expo/vector-icons"
+import { LinearGradient } from "expo-linear-gradient"
+import Button from "./ui/Button"
+import { theme } from "../config/theme"
+import { PLANS } from "../utils/constants"
 
 const PaymentModal = ({ visible, onClose, onPaymentSuccess }) => {
-  const [selectedPlan, setSelectedPlan] = useState(
-    PLANS[0]?.name || "20-Min Vent"
-  ); // Default to first plan or "20-Min Vent"
-  const [processing, setProcessing] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(PLANS[0]?.name || "20-Min Vent")
+  const [processing, setProcessing] = useState(false)
 
-  const plans = PLANS;
+  const plans = PLANS
+
+  
+  const debugLog = useCallback(
+    (action, data = {}) => {
+      const timestamp = new Date().toISOString()
+      console.log(`💳 [PaymentModal] ${action}`, {
+        timestamp,
+        selectedPlan,
+        processing,
+        visible,
+        ...data,
+      })
+    },
+    [selectedPlan, processing, visible],
+  )
+
+  const handlePlanSelection = useCallback(
+    (planName) => {
+      debugLog("plan_selected", {
+        previousPlan: selectedPlan,
+        newPlan: planName,
+      })
+      setSelectedPlan(planName)
+    },
+    [selectedPlan, debugLog],
+  )
 
   const handlePayment = useCallback(async () => {
-    setProcessing(true);
+    const selectedPlanObject = plans.find((p) => p.name === selectedPlan)
+
+    debugLog("payment_start", {
+      selectedPlanObject,
+      planPrice: selectedPlanObject?.price,
+      planDuration: selectedPlanObject?.durationInMinutes,
+    })
+
+    setProcessing(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Simulate payment processing
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      Alert.alert(
-        "Payment Successful",
-        `You have successfully purchased ${selectedPlan}. Preparing your session...`,
-        [
-          {
-            text: "Continue",
-            onPress: () => {
-              onPaymentSuccess(selectedPlan);
-              onClose(); // onClose will be called by DashboardScreen after payment success processing
-            },
+      debugLog("payment_success", {
+        planName: selectedPlan,
+        planObject: selectedPlanObject,
+      })
+
+      Alert.alert("Payment Successful", `You have successfully purchased ${selectedPlan}. Preparing your session...`, [
+        {
+          text: "Continue",
+          onPress: () => {
+            debugLog("payment_success_confirmed", {
+              proceedingToSession: true,
+            })
+            onPaymentSuccess(selectedPlanObject) // Pass the full plan object
+            // Note: onClose will be called by DashboardScreen after payment success processing
           },
-        ]
-      );
+        },
+      ])
     } catch (error) {
-      console.error("Payment processing error:", error);
-      Alert.alert(
-        "Payment Failed",
-        "There was an issue processing your payment. Please try again later."
-      );
+      debugLog("payment_error", {
+        error: error.message,
+        stack: error.stack?.substring(0, 200),
+      })
+
+      console.error("Payment processing error:", error)
+      Alert.alert("Payment Failed", "There was an issue processing your payment. Please try again later.")
     } finally {
-      setProcessing(false);
+      setProcessing(false)
+      debugLog("payment_processing_complete")
     }
-  }, [selectedPlan, onPaymentSuccess]);
+  }, [selectedPlan, onPaymentSuccess, plans, debugLog])
 
   const PlanCard = useCallback(
     ({ plan }) => (
       <TouchableOpacity
-        style={[
-          styles.planCard,
-          selectedPlan === plan.name && styles.selectedPlan,
-        ]}
-        onPress={() => setSelectedPlan(plan.name)}
+        style={[styles.planCard, selectedPlan === plan.name && styles.selectedPlan]}
+        onPress={() => handlePlanSelection(plan.name)}
         disabled={processing}
       >
         <View style={styles.planHeader}>
@@ -78,52 +105,43 @@ const PaymentModal = ({ visible, onClose, onPaymentSuccess }) => {
 
         <View style={styles.planDetails}>
           <Text style={styles.planPrice}>{plan.price}</Text>
-          <Text style={styles.planDuration}>
-            {plan.durationInMinutes} minutes
-          </Text>
-         
+          <Text style={styles.planDuration}>{plan.durationInMinutes} minutes</Text>
         </View>
 
         {selectedPlan === plan.name && (
           <View style={styles.checkmark}>
-            <Ionicons
-              name="checkmark-circle"
-              size={24}
-              color={theme.colors.success}
-            />
-            
+            <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
           </View>
         )}
       </TouchableOpacity>
     ),
-    [selectedPlan, processing, theme.colors.success]
-  );
+    [selectedPlan, processing, handlePlanSelection],
+  )
+
+  // Log modal visibility changes
+  useState(() => {
+    debugLog("modal_visibility_changed", { visible })
+  }, [visible])
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <LinearGradient colors={["#1a1a40", "#0f0f2e"]} style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Choose Your Plan</Text>
           <TouchableOpacity
-            onPress={onClose}
+            onPress={() => {
+              debugLog("modal_close_requested")
+              onClose()
+            }}
             style={styles.closeButton}
             disabled={processing}
           >
-            
-            {/* Disable close during processing */}
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.subtitle}>
-            Select a plan to start your anonymous vent session
-          </Text>
+          <Text style={styles.subtitle}>Select a plan to start your anonymous vent session</Text>
 
           <View style={styles.plansContainer}>
             {plans.map((plan) => (
@@ -134,37 +152,19 @@ const PaymentModal = ({ visible, onClose, onPaymentSuccess }) => {
           <View style={styles.features}>
             <Text style={styles.featuresTitle}>What's included:</Text>
             <View style={styles.featureItem}>
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={theme.colors.success}
-              />
+              <Ionicons name="checkmark" size={20} color={theme.colors.success} />
               <Text style={styles.featureText}>Anonymous voice session</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={theme.colors.success}
-              />
-              <Text style={styles.featureText}>
-                Matched with trained listener
-              </Text>
+              <Ionicons name="checkmark" size={20} color={theme.colors.success} />
+              <Text style={styles.featureText}>Matched with trained listener</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={theme.colors.success}
-              />
+              <Ionicons name="checkmark" size={20} color={theme.colors.success} />
               <Text style={styles.featureText}>End-to-end encrypted</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={theme.colors.success}
-              />
+              <Ionicons name="checkmark" size={20} color={theme.colors.success} />
               <Text style={styles.featureText}>No recording or storage</Text>
             </View>
           </View>
@@ -172,44 +172,36 @@ const PaymentModal = ({ visible, onClose, onPaymentSuccess }) => {
 
         <View style={styles.footer}>
           <Button
-            title={
-              processing
-                ? "Processing..."
-                : `Pay ${plans.find((p) => p.name === selectedPlan)?.price || "N/A"}`
-            }
+            title={processing ? "Processing..." : `Pay ${plans.find((p) => p.name === selectedPlan)?.price || "N/A"}`}
             onPress={handlePayment}
             disabled={processing}
             loading={processing}
-            // You might want to pass a specific variant to the Button component
-            variant="primary" // Assuming you have 'primary' variant
+            variant="primary"
           />
 
-          <Text style={styles.disclaimer}>
-            Secure payment processed by Stripe. Cancel anytime.
-          </Text>
+          <Text style={styles.disclaimer}>Secure payment processed by Stripe. Cancel anytime.</Text>
         </View>
       </LinearGradient>
     </Modal>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // Background gradient is handled by LinearGradient directly
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: theme.spacing.lg, // Use theme spacing
+    paddingHorizontal: theme.spacing.lg,
     paddingTop: Platform.OS === "ios" ? 60 : 40,
     paddingBottom: theme.spacing.md,
   },
   title: {
-    fontSize: theme.typography.h3.fontSize, // Use theme typography
+    fontSize: theme.typography.h3.fontSize,
     fontWeight: "bold",
-    color: theme.colors.text.primary, // Use theme color
+    color: theme.colors.text.primary,
   },
   closeButton: {
     padding: theme.spacing.sm,
@@ -229,18 +221,18 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   planCard: {
-    backgroundColor: theme.colors.overlay, // Use theme color
-    borderRadius: theme.borderRadius.xl, // Use theme border radius
+    backgroundColor: theme.colors.overlay,
+    borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
     borderWidth: 2,
     borderColor: "transparent",
     position: "relative",
-    ...theme.shadows.small, // Apply theme shadows
+    ...theme.shadows.small,
   },
   selectedPlan: {
-    borderColor: theme.colors.primary, // Use theme color
-    backgroundColor: theme.colors.primaryTransparent, // Assuming you have a transparent primary color in theme
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryTransparent,
   },
   planHeader: {
     flexDirection: "row",
@@ -259,7 +251,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text.secondary,
   },
   popularBadge: {
-    backgroundColor: theme.colors.accent, // Use theme color for accent
+    backgroundColor: theme.colors.secondary, 
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
     borderRadius: theme.borderRadius.full,
@@ -267,7 +259,7 @@ const styles = StyleSheet.create({
   popularText: {
     fontSize: theme.typography.small.fontSize,
     fontWeight: "600",
-    color: theme.colors.text.dark, // Assuming a dark text color for badges
+    color: "#000", 
   },
   planDetails: {
     flexDirection: "row",
@@ -289,7 +281,7 @@ const styles = StyleSheet.create({
     right: 15,
   },
   features: {
-    backgroundColor: theme.colors.overlay, // Use theme color
+    backgroundColor: theme.colors.overlay,
     borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.xl,
@@ -314,8 +306,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: Platform.OS === "ios" ? 40 : 20,
     paddingTop: theme.spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth, 
-    borderTopColor: theme.colors.border, 
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
   },
   disclaimer: {
     fontSize: theme.typography.caption.fontSize,
@@ -324,6 +316,6 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     lineHeight: 16,
   },
-});
+})
 
-export default PaymentModal;
+export default PaymentModal

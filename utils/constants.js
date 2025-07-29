@@ -2,13 +2,13 @@ export const APP_CONFIG = {
   name: "VentBox",
   version: "1.0.0",
   supportEmail: "support@ventbox.app",
-};
+}
 
 export const PLANS = [
   {
     name: "10-Min Vent",
     price: "$2.99",
-    duration: 10 * 60, // Duration in seconds
+    duration: 10 * 60,
     durationInMinutes: 10,
     description: "Quick, focused vent session",
     popular: false,
@@ -29,13 +29,13 @@ export const PLANS = [
     description: "Extended, deep-dive vent session",
     popular: false,
   },
-];
+]
 
 export const FIREBASE_COLLECTIONS = {
   USERS: "users",
   QUEUE: "queue",
   SESSIONS: "sessions",
-};
+}
 
 export const ROUTES = {
   WELCOME: "/",
@@ -44,7 +44,7 @@ export const ROUTES = {
   LISTENER: "/listener",
   VOICE_CALL: "/voice-call",
   SESSION_ENDED: "/session-ended",
-};
+}
 
 export const VALIDATION = {
   VENT_TEXT: {
@@ -55,4 +55,4 @@ export const VALIDATION = {
     MAX_DURATION: 30 * 60,
     TIMEOUT_WARNING: 60,
   },
-};
+}

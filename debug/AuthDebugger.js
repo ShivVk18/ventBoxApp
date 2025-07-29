@@ -1,5 +1,3 @@
-"use client"
-
 import { View, Text, StyleSheet, ScrollView } from "react-native"
 import { useAuth } from "../../context/AuthContext"
 import Button from "../ui/Button"
@@ -121,4 +119,3 @@ const styles = StyleSheet.create({
 })
 
 export default AuthDebugger
-  

@@ -1,5 +1,3 @@
-"use client"
-
 import React, { useEffect } from "react"
 import { View, Text, StyleSheet } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
@@ -7,7 +5,6 @@ import GradientContainer from "../components/ui/GradientContainer"
 import StatusBar from "../components/ui/StatusBar"
 import Button from "../components/ui/Button"
 import Avatar from "../components/ui/Avatar"
-
 import { theme } from "../config/theme"
 import { formatDuration } from "../utils/helper"
 

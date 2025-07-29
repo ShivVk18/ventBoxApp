@@ -1,5 +1,3 @@
-"use client"
-
 import React, { useEffect, useState } from "react"
 import { View, Text, StyleSheet, Alert } from "react-native"
 import { router } from "expo-router"

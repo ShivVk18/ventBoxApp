@@ -1,52 +1,49 @@
-"use client"
-import { View, Alert, StyleSheet, ActivityIndicator, Text } from "react-native" 
+import { useEffect, useCallback, useState } from "react"
+import { View, Alert, StyleSheet, ActivityIndicator, Text, BackHandler } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import GradientContainer from "../components/ui/GradientContainer"
 import StatusBar from "../components/ui/StatusBar"
+import Button from "../components/ui/Button"
 import SessionTimer from "../components/session/SessionTimer"
 import ConnectionStatus from "../components/session/ConnectionStatus"
 import VoiceControls from "../components/session/VoiceControls"
 import useTimer from "../hooks/useTimer"
 import useAgora from "../hooks/useAgora"
 import firestoreService from "../services/firestoreService"
-import { PLANS } from "../utils/constants" 
+import { PLANS } from "../utils/constants"
 
 export default function VoiceCall() {
   const params = useLocalSearchParams()
   const { ventText, plan, channelName, isHost, sessionId } = params
+  const [connectionAttempts, setConnectionAttempts] = useState(0)
+  const [isExiting, setIsExiting] = useState(false)
 
-  
-  if (!channelName || !sessionId || typeof isHost === 'undefined' || !plan) {
-    Alert.alert("Error", "Missing call parameters. Returning to dashboard.")
-    router.replace("/dashboard") 
-    return null 
-  }
+  const isVenter = isHost === "true"
 
   const getDurationInSeconds = (planName) => {
     const planData = PLANS.find((p) => p.name === planName)
-   
-    return planData ? planData.duration : 20 * 60 
+    return planData ? planData.duration : 20 * 60
   }
 
   const initialCallDuration = getDurationInSeconds(plan)
 
   const handleTimeUp = useCallback(async () => {
-    // This is called when the timer runs out
+    if (isExiting) return
+    setIsExiting(true)
+
     Alert.alert("Session Ended", "Your session has ended automatically due to time limit.", [
       {
         text: "OK",
         onPress: async () => {
-          
-          await leaveChannel() 
+          await leaveChannel()
           if (sessionId) {
             try {
-             
-              await firestoreService.endSession(sessionId, sessionTime, 'auto-ended')
+              await firestoreService.endSession(sessionId, sessionTime, "auto-ended")
             } catch (error) {
               console.error("Error ending session in Firestore (auto-ended):", error)
             }
           }
-          router.replace({ 
+          router.replace({
             pathname: "/session-ended",
             params: {
               sessionTime: sessionTime.toString(),
@@ -57,104 +54,207 @@ export default function VoiceCall() {
         },
       },
     ])
-  }, [leaveChannel, sessionId, sessionTime, plan]); 
+  }, [isExiting])
 
   const { sessionTime, timeRemaining, stopTimer } = useTimer(initialCallDuration, handleTimeUp)
-  const { joined, remoteUsers, muted, speakerEnabled, error: agoraError, toggleMute, toggleSpeaker, leaveChannel } = useAgora(channelName)
+  const {
+    joined,
+    remoteUsers,
+    muted,
+    speakerEnabled,
+    error: agoraError,
+    connectionState,
+    toggleMute,
+    toggleSpeaker,
+    leaveChannel,
+    joinChannel,
+  } = useAgora(channelName, isVenter)
 
-  
+  // Handle Android back button
   useEffect(() => {
-    if (agoraError) {
-    
-      console.error("VoiceCall Screen: Agora reported an error:", agoraError)
-      
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleEndCall()
+      return true // Prevent default behavior
+    })
+
+    return () => backHandler.remove()
+  }, [])
+
+  // Validate required parameters
+  useEffect(() => {
+    if (!channelName || !sessionId || typeof isHost === "undefined" || !plan) {
+      console.error("Missing required parameters:", { channelName, sessionId, isHost, plan })
+      Alert.alert("Error", "Missing call parameters. Returning to dashboard.")
+      router.replace("/dashboard-screen")
     }
-  }, [agoraError]);
+  }, [channelName, sessionId, isHost, plan])
+
+  // Handle Agora errors with retry logic
+  useEffect(() => {
+    if (agoraError && !isExiting) {
+      console.error("VoiceCall Screen: Agora reported an error:", agoraError)
+
+      // Auto-retry for certain errors
+      if (connectionState === "failed" && connectionAttempts < 2) {
+        console.log(`Attempting to reconnect (attempt ${connectionAttempts + 1}/2)`)
+        setConnectionAttempts((prev) => prev + 1)
+
+        setTimeout(() => {
+          if (!isExiting) {
+            joinChannel()
+          }
+        }, 3000)
+      } else if (connectionAttempts >= 2) {
+        // Max retries reached
+        Alert.alert(
+          "Connection Failed",
+          "Unable to establish voice connection after multiple attempts. Please try again later.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace("/dashboard-screen"),
+            },
+          ],
+        )
+      }
+    }
+  }, [agoraError, connectionState, connectionAttempts, joinChannel, isExiting])
+
+  // Reset connection attempts on successful connection
+  useEffect(() => {
+    if (joined) {
+      setConnectionAttempts(0)
+    }
+  }, [joined])
 
   const handleEndCall = useCallback(async () => {
+    if (isExiting) return
+    setIsExiting(true)
+
     Alert.alert("End Session", "Are you sure you want to end this session?", [
-      { text: "Cancel", style: "cancel" },
+      {
+        text: "Cancel",
+        style: "cancel",
+        onPress: () => setIsExiting(false),
+      },
       {
         text: "End",
         onPress: async () => {
           try {
-            stopTimer() // Stop the timer immediately
-            await leaveChannel() // Disconnect from Agora
+            stopTimer()
+            await leaveChannel()
 
             if (sessionId) {
               try {
-                // Mark session as ended in Firestore
-                await firestoreService.endSession(sessionId, sessionTime, 'manual-ended')
+                await firestoreService.endSession(sessionId, sessionTime, "manual-ended")
               } catch (error) {
                 console.error("Error ending session in Firestore (manual-ended):", error)
-                Alert.alert("Firestore Error", "Failed to update session status. Check your internet connection.")
               }
             }
 
-            router.replace({ 
+            router.replace({
               pathname: "/session-ended",
               params: {
-                sessionTime: sessionTime.toString(), // Ensure this is a string
+                sessionTime: sessionTime.toString(),
                 plan,
                 autoEnded: "false",
               },
             })
           } catch (error) {
             console.error("Error during manual call ending process:", error)
-            Alert.alert("Error", "Failed to end call cleanly. Please restart the app if issues persist.")
+            // Still navigate away even if there's an error
+            router.replace("/dashboard-screen")
           }
         },
       },
     ])
-  }, [stopTimer, leaveChannel, sessionId, sessionTime, plan]); 
+  }, [stopTimer, leaveChannel, sessionId, sessionTime, plan, isExiting])
 
-  
-  if (!joined && remoteUsers.length === 0 && !agoraError) {
+  const handleRetryConnection = useCallback(() => {
+    if (isExiting) return
+    setConnectionAttempts(0)
+    joinChannel()
+  }, [joinChannel, isExiting])
+
+  // Loading state while connecting
+  if (connectionState === "connecting" || (!joined && remoteUsers.length === 0 && !agoraError)) {
     return (
       <GradientContainer>
         <StatusBar />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Connecting to session...</Text>
-          <Text style={styles.loadingSubText}>Please ensure your internet connection is stable.</Text>
-          {/* Optionally add a cancel button here */}
-          <Button title="Cancel Connection" onPress={handleEndCall} variant="outline" style={styles.cancelButton} />
+          <Text style={styles.loadingText}>
+            {connectionState === "connecting" ? "Connecting to session..." : "Initializing voice call..."}
+          </Text>
+          <Text style={styles.loadingSubText}>
+            {connectionAttempts > 0
+              ? `Retry attempt ${connectionAttempts}/2`
+              : "Please ensure your internet connection is stable."}
+          </Text>
+          <Button
+            title="Cancel Connection"
+            onPress={() => router.replace("/dashboard-screen")}
+            variant="outline"
+            style={styles.cancelButton}
+          />
         </View>
       </GradientContainer>
-    );
+    )
   }
 
- 
-  if (agoraError) {
+  // Error state
+  if (agoraError && connectionState === "failed" && connectionAttempts >= 2) {
     return (
       <GradientContainer>
         <StatusBar />
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Connection Failed</Text>
           <Text style={styles.errorMessage}>{agoraError}</Text>
-          <Button title="Try Again" onPress={() => router.replace("/dashboard")} variant="primary" /> {/* Go back to dashboard to retry */}
-          <Button title="Go Back to Dashboard" onPress={() => router.replace("/dashboard")} variant="outline" style={{ marginTop: 10 }} />
+          <Text style={styles.errorSubMessage}>Failed to connect after {connectionAttempts} attempts.</Text>
+          <Button title="Try Again" onPress={handleRetryConnection} variant="primary" />
+          <Button
+            title="Go Back to Dashboard"
+            onPress={() => router.replace("/dashboard-screen")}
+            variant="outline"
+            style={{ marginTop: 10 }}
+          />
         </View>
       </GradientContainer>
-    );
+    )
   }
 
-
+  // Main voice call UI
   return (
     <GradientContainer>
       <StatusBar />
       <View style={styles.container}>
         <SessionTimer sessionTime={sessionTime} timeRemaining={timeRemaining} plan={plan} />
-       
-        <ConnectionStatus joined={joined} remoteUsers={remoteUsers} timeRemaining={timeRemaining} agoraError={agoraError} />
+        <ConnectionStatus
+          joined={joined}
+          remoteUsers={remoteUsers}
+          timeRemaining={timeRemaining}
+          agoraError={agoraError}
+          connectionState={connectionState}
+          isVenter={isVenter}
+        />
         <VoiceControls
           muted={muted}
           speakerEnabled={speakerEnabled}
           onToggleMute={toggleMute}
           onToggleSpeaker={toggleSpeaker}
           onEndCall={handleEndCall}
-          disabled={!joined} // Disable controls if not joined
+          disabled={!joined || isExiting}
+          connectionState={connectionState}
         />
+
+        {/* Connection status indicator */}
+        {connectionState !== "connected" && (
+          <View style={styles.connectionIndicator}>
+            <Text style={styles.connectionText}>
+              Status: {connectionState.charAt(0).toUpperCase() + connectionState.slice(1)}
+            </Text>
+          </View>
+        )}
       </View>
     </GradientContainer>
   )
@@ -166,21 +266,21 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   loadingText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 20,
   },
   loadingSubText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     marginTop: 5,
-    textAlign: 'center',
+    textAlign: "center",
   },
   cancelButton: {
     marginTop: 30,
@@ -188,21 +288,41 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   errorTitle: {
-    color: 'red',
+    color: "red",
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 10,
   },
   errorMessage: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  errorSubMessage: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 14,
+    textAlign: "center",
     marginBottom: 30,
+  },
+  connectionIndicator: {
+    position: "absolute",
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  connectionText: {
+    color: "#fff",
+    fontSize: 12,
   },
 })

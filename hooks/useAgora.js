@@ -1,15 +1,59 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Platform, PermissionsAndroid, Alert } from "react-native"
-import RtcEngine, { ChannelProfile, ClientRole } from "react-native-agora"
+import { Platform, PermissionsAndroid } from "react-native"
+
+let RtcEngine, ChannelProfile, ClientRole, RtcEngineEventType
+try {
+  const AgoraModule = require("react-native-agora")
+  RtcEngine = AgoraModule.default
+  ChannelProfile = AgoraModule.ChannelProfile
+  ClientRole = AgoraModule.ClientRole
+  RtcEngineEventType = AgoraModule.RtcEngineEventType
+} catch (error) {
+  console.error("Failed to import Agora SDK:", error)
+}
+
 import { agoraConfig, generateAgoraToken } from "../config/agora.config"
 
-const useAgora = (channelName) => {
+
+let globalEngineInstance = null
+let globalInitializationPromise = null
+
+export default function useAgora(channelName, isVenter) {
   const [joined, setJoined] = useState(false)
   const [remoteUsers, setRemoteUsers] = useState([])
   const [muted, setMuted] = useState(false)
   const [speakerEnabled, setSpeakerEnabled] = useState(true)
-  const [error, setError] = useState(null) 
-  const engineRef = useRef(null)
+  const [error, setError] = useState(null)
+  const [connectionState, setConnectionState] = useState("disconnected")
+
+  const isMountedRef = useRef(true)
+  const tokenRef = useRef(null)
+  const joinTimeoutRef = useRef(null)
+
+  // Disable Agora completely if import failed
+  const [agoraSdkAvailable, setAgoraSdkAvailable] = useState(!!RtcEngine)
+
+  useEffect(() => {
+    if (!RtcEngine) {
+      setError("Agora SDK not available. Voice calls are disabled.")
+      setConnectionState("failed")
+    }
+  }, [])
+
+  if (!agoraSdkAvailable) {
+    return {
+      joined: false,
+      remoteUsers: [],
+      muted: false,
+      speakerEnabled: true,
+      error: "Agora SDK not available",
+      connectionState: "failed",
+      joinChannel: async () => false,
+      leaveChannel: async () => {},
+      toggleMute: async () => {},
+      toggleSpeaker: async () => {},
+    }
+  }
 
   const requestPermissions = useCallback(async () => {
     try {
@@ -20,231 +64,378 @@ const useAgora = (channelName) => {
         ])
 
         const audioGranted = granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
-        const settingsGranted = granted[PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS] === PermissionsAndroid.RESULTS.GRANTED
+        const settingsGranted =
+          granted[PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS] === PermissionsAndroid.RESULTS.GRANTED
 
-        if (!audioGranted || !settingsGranted) {
-          Alert.alert(
-            "Permissions Required",
-            "Microphone and audio settings permissions are essential for voice calls. Please grant them in app settings."
-          )
-          return false
-        }
-        return true
+        return audioGranted && settingsGranted
       }
       return true
     } catch (error) {
       console.error("Permission request error:", error)
-      setError("Failed to request permissions.")
       return false
     }
   }, [])
 
+  const destroyGlobalEngine = useCallback(async () => {
+    if (globalEngineInstance) {
+      try {
+        console.log("Destroying global Agora engine")
+        await globalEngineInstance.removeAllListeners()
+        await globalEngineInstance.leaveChannel()
+        await globalEngineInstance.destroy()
+      } catch (error) {
+        console.warn("Error destroying global engine:", error)
+      } finally {
+        globalEngineInstance = null
+        globalInitializationPromise = null
+      }
+    }
+  }, [])
+
   const initializeEngine = useCallback(async () => {
-    if (engineRef.current) return engineRef.current // Engine already initialized
+    // Return existing engine if available
+    if (globalEngineInstance) {
+      console.log("Using existing global Agora engine")
+      return globalEngineInstance
+    }
+
+    // Return existing promise if initialization is in progress
+    if (globalInitializationPromise) {
+      console.log("Waiting for existing initialization")
+      return globalInitializationPromise
+    }
+
+    // Start new initialization
+    globalInitializationPromise = (async () => {
+      try {
+        console.log("Starting Agora engine initialization")
+
+        // Check permissions first
+        const hasPermissions = await requestPermissions()
+        if (!hasPermissions) {
+          throw new Error("Required permissions not granted")
+        }
+
+        if (!agoraConfig.appId) {
+          throw new Error("Agora App ID is missing")
+        }
+
+        // Create engine with timeout
+        const enginePromise = RtcEngine.create(agoraConfig.appId)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Engine creation timeout")), 10000),
+        )
+
+        const agoraEngine = await Promise.race([enginePromise, timeoutPromise])
+
+        if (!agoraEngine) {
+          throw new Error("Engine creation returned null")
+        }
+
+        console.log("Agora engine created successfully")
+
+        // Configure engine with individual try-catch blocks
+        try {
+          await agoraEngine.setChannelProfile(ChannelProfile.Communication)
+        } catch (e) {
+          console.warn("Failed to set channel profile:", e)
+        }
+
+        try {
+          await agoraEngine.setClientRole(ClientRole.Broadcaster)
+        } catch (e) {
+          console.warn("Failed to set client role:", e)
+        }
+
+        try {
+          await agoraEngine.enableAudio()
+        } catch (e) {
+          console.warn("Failed to enable audio:", e)
+        }
+
+        // Add small delays between audio settings
+        await new Promise((resolve) => setTimeout(resolve, 200))
+
+        try {
+          await agoraEngine.setDefaultAudioRoutetoSpeakerphone(true)
+        } catch (e) {
+          console.warn("Failed to set speaker route:", e)
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200))
+
+        try {
+          await agoraEngine.setEnableSpeakerphone(true)
+        } catch (e) {
+          console.warn("Failed to enable speakerphone:", e)
+        }
+
+        // Store globally
+        globalEngineInstance = agoraEngine
+        console.log("Agora engine initialized and stored globally")
+
+        return agoraEngine
+      } catch (error) {
+        console.error("Agora initialization failed:", error)
+        globalInitializationPromise = null
+        throw error
+      }
+    })()
+
+    return globalInitializationPromise
+  }, [requestPermissions])
+
+  const addEventListeners = useCallback((engine) => {
+    if (!engine || !isMountedRef.current) return
 
     try {
-      const hasPermissions = await requestPermissions()
-      if (!hasPermissions) {
-        setError("Missing required permissions for voice call.")
-        return null
-      }
-
-      // Ensure Agora App ID is present
-      if (!agoraConfig.appId) {
-        console.error("Agora App ID is not configured!")
-        setError("Agora App ID is missing.")
-        Alert.alert("Configuration Error", "Agora App ID is not set. Please check config/agora.js.")
-        return null
-      }
-
-      const agoraEngine = await RtcEngine.create(agoraConfig.appId)
-      engineRef.current = agoraEngine
-
-      await agoraEngine.setChannelProfile(ChannelProfile.Communication)
-      await agoraEngine.setClientRole(ClientRole.Broadcaster) // Broadcaster is required to send audio
-      await agoraEngine.enableAudio()
-      await agoraEngine.setDefaultAudioRoutetoSpeakerphone(true)
-      await agoraEngine.setEnableSpeakerphone(true)
-
-      // Add comprehensive listeners for better debugging and state management
-      agoraEngine.addListener("JoinChannelSuccess", (channel, uid, elapsed) => {
-        console.log("Agora: Joined channel successfully:", channel, uid)
+      // Join Channel Success
+      engine.addListener(RtcEngineEventType.JoinChannelSuccess, (channel, uid, elapsed) => {
+        if (!isMountedRef.current) return
+        console.log("Agora: Joined channel successfully:", channel)
         setJoined(true)
-        setError(null) // Clear any previous errors
+        setError(null)
+        setConnectionState("connected")
+
+        // Clear join timeout
+        if (joinTimeoutRef.current) {
+          clearTimeout(joinTimeoutRef.current)
+          joinTimeoutRef.current = null
+        }
       })
 
-      agoraEngine.addListener("UserJoined", (uid, elapsed) => {
+      // User Joined
+      engine.addListener(RtcEngineEventType.UserJoined, (uid, elapsed) => {
+        if (!isMountedRef.current) return
         console.log("Agora: User joined:", uid)
-        setRemoteUsers((prev) => [...prev.filter((user) => user.uid !== uid), { uid }])
+        setRemoteUsers((prev) => (prev.includes(uid) ? prev : [...prev, uid]))
       })
 
-      agoraEngine.addListener("UserOffline", (uid, reason) => {
-        console.log("Agora: User left:", uid, reason)
-        setRemoteUsers((prev) => prev.filter((user) => user.uid !== uid))
-        // Consider if the other user leaving should end the session immediately
-        // or prompt the current user. For now, just update remoteUsers.
+      // User Offline
+      engine.addListener(RtcEngineEventType.UserOffline, (uid, reason) => {
+        if (!isMountedRef.current) return
+        console.log("Agora: User left:", uid)
+        setRemoteUsers((prev) => prev.filter((id) => id !== uid))
       })
 
-      agoraEngine.addListener("LeaveChannel", (stats) => {
+      // Leave Channel
+      engine.addListener(RtcEngineEventType.LeaveChannel, (stats) => {
+        if (!isMountedRef.current) return
         console.log("Agora: Left channel")
         setJoined(false)
         setRemoteUsers([])
+        setConnectionState("disconnected")
       })
 
-      agoraEngine.addListener("Error", (err) => {
+      // Error
+      engine.addListener(RtcEngineEventType.Error, (err) => {
+        if (!isMountedRef.current) return
         console.error("Agora Error:", err)
-        setError(`Agora Error: ${err.code} - ${err.message}`)
-        Alert.alert("Agora Error", `Code: ${err.code}\nMessage: ${err.message}`, [{ text: "OK" }])
-        // Potentially leave channel or destroy engine on critical errors
+        setError(`Agora Error: ${err.code}`)
+        setConnectionState("failed")
       })
 
-      agoraEngine.addListener("ConnectionLost", () => {
-        console.warn("Agora: Connection lost!")
-        setError("Connection lost. Trying to reconnect...")
+      // Connection Lost
+      engine.addListener(RtcEngineEventType.ConnectionLost, () => {
+        if (!isMountedRef.current) return
+        console.warn("Agora: Connection lost")
+        setError("Connection lost")
+        setConnectionState("connecting")
       })
 
-      agoraEngine.addListener("ConnectionInterrupted", () => {
-        console.warn("Agora: Connection interrupted!")
-        setError("Connection interrupted. Trying to reconnect...")
-      })
-
-      agoraEngine.addListener("ConnectionBanned", () => {
-        console.error("Agora: Connection banned!")
-        setError("Connection banned. Please check your Agora configuration or account status.")
-      })
-
-      agoraEngine.addListener("Warning", (warn) => {
-        console.warn("Agora Warning:", warn)
-      })
-
-      return agoraEngine
+      console.log("Event listeners added successfully")
     } catch (error) {
-      console.error("Agora initialization error:", error)
-      setError(`Failed to initialize voice call: ${error.message}`)
-      Alert.alert("Connection Error", `Failed to initialize voice call: ${error.message}`)
-      
-      if (engineRef.current) {
-        await engineRef.current.destroy()
-        engineRef.current = null;
-      }
-      return null
+      console.error("Failed to add event listeners:", error)
     }
-  }, [requestPermissions]) 
+  }, [])
 
   const joinChannel = useCallback(async () => {
     if (!channelName) {
-      console.error("Cannot join channel: channelName is undefined.")
-      setError("Cannot join channel: Channel name missing.")
+      setError("Channel name is required")
+      setConnectionState("failed")
       return false
     }
 
     try {
-      const agoraEngine = await initializeEngine()
-      if (!agoraEngine) {
-        console.error("Agora engine not initialized, cannot join channel.")
-        return false
+      setConnectionState("connecting")
+      setError(null)
+
+      console.log("Initializing engine for channel join")
+      const engine = await initializeEngine()
+
+      if (!engine) {
+        throw new Error("Failed to initialize Agora engine")
       }
 
-      // This is the CRITICAL part. You NEED a valid token from a backend.
-      // If you are testing locally WITHOUT a backend, you can temporarily
-      // use null for UID (0) and token if your Agora project settings allow it (NOT SECURE FOR PROD).
-      // For proper setup, uncomment the `token` generation line below.
-      const token = await generateAgoraToken(channelName, 0) // UID 0 for now, replace with actual user UID if needed
-      if (token === null) {
-        // Only if generateAgoraToken can return null due to backend issues.
-        // Your generateAgoraToken in agora.js currently *always* returns null.
-        // This is the source of "flow nhi bnra".
-        Alert.alert("Token Error", "Failed to get Agora token. Please check your network or try again.")
-        setError("Failed to get Agora token.")
-        return false
+      // Add event listeners
+      addEventListeners(engine)
+
+      console.log("Generating token for channel:", channelName)
+      const token = await generateAgoraToken(channelName, 0)
+
+      if (!token) {
+        throw new Error("Failed to generate token")
       }
 
-      console.log("Attempting to join channel:", channelName, "with token:", token ? "generated" : "null")
-      await agoraEngine.joinChannel(token, channelName, null, 0) // UID 0 for now, can be specific user ID
-      return true
+      tokenRef.current = token
+
+      console.log("Joining channel:", channelName)
+
+      // Set join timeout
+      joinTimeoutRef.current = setTimeout(() => {
+        if (!joined && isMountedRef.current) {
+          console.warn("Join channel timeout")
+          setError("Connection timeout")
+          setConnectionState("failed")
+        }
+      }, 20000) // 20 second timeout
+
+      // Join channel with error handling
+      try {
+        await engine.joinChannel(token, channelName, null, 0)
+        console.log("Join channel request sent")
+        return true
+      } catch (joinError) {
+        console.error("Join channel failed:", joinError)
+        throw new Error(`Failed to join: ${joinError.message}`)
+      }
     } catch (error) {
       console.error("Join channel error:", error)
-      setError(`Failed to join voice call: ${error.message}`)
-      Alert.alert("Connection Error", `Failed to join voice call: ${error.message}`)
+      if (isMountedRef.current) {
+        setError(`Join failed: ${error.message}`)
+        setConnectionState("failed")
+      }
+
+      // Clear timeout on error
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current)
+        joinTimeoutRef.current = null
+      }
+
       return false
     }
-  }, [channelName, initializeEngine])
+  }, [channelName, initializeEngine, addEventListeners, joined])
 
   const leaveChannel = useCallback(async () => {
     try {
-      if (engineRef.current) {
-        // Remove all listeners before destroying to prevent memory leaks
-        engineRef.current.removeAllListeners()
-        await engineRef.current.leaveChannel()
-        await engineRef.current.destroy()
-        engineRef.current = null
+      console.log("Leaving channel")
+      setConnectionState("disconnected")
+
+      // Clear join timeout
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current)
+        joinTimeoutRef.current = null
+      }
+
+      if (globalEngineInstance) {
+        try {
+          await globalEngineInstance.leaveChannel()
+          console.log("Left channel successfully")
+        } catch (error) {
+          console.warn("Error leaving channel:", error)
+        }
+      }
+
+      if (isMountedRef.current) {
         setJoined(false)
         setRemoteUsers([])
         setMuted(false)
         setSpeakerEnabled(true)
         setError(null)
       }
+
+      // Don't destroy the global engine here - let it be reused
+      console.log("Channel left, engine preserved for reuse")
     } catch (error) {
       console.error("Leave channel error:", error)
-      setError(`Failed to leave channel cleanly: ${error.message}`)
     }
   }, [])
 
   const toggleMute = useCallback(async () => {
+    if (!globalEngineInstance || !joined) return
+
     try {
-      if (engineRef.current && joined) { // Only toggle if joined
-        await engineRef.current.muteLocalAudioStream(!muted)
-        setMuted((prev) => !prev)
+      const newMutedState = !muted
+      await globalEngineInstance.muteLocalAudioStream(newMutedState)
+      if (isMountedRef.current) {
+        setMuted(newMutedState)
       }
     } catch (error) {
       console.error("Toggle mute error:", error)
-      setError(`Failed to toggle mute: ${error.message}`)
     }
   }, [muted, joined])
 
   const toggleSpeaker = useCallback(async () => {
+    if (!globalEngineInstance || !joined) return
+
     try {
-      if (engineRef.current && joined) { // Only toggle if joined
-        await engineRef.current.setEnableSpeakerphone(!speakerEnabled)
-        setSpeakerEnabled((prev) => !prev)
+      const newSpeakerState = !speakerEnabled
+      await globalEngineInstance.setEnableSpeakerphone(newSpeakerState)
+      if (isMountedRef.current) {
+        setSpeakerEnabled(newSpeakerState)
       }
     } catch (error) {
       console.error("Toggle speaker error:", error)
-      setError(`Failed to toggle speaker: ${error.message}`)
     }
   }, [speakerEnabled, joined])
 
+  // Component lifecycle
   useEffect(() => {
-    let cleanupPerformed = false; // Flag to prevent double cleanup
-    if (channelName) {
-      joinChannel().then(success => {
-        if (!success && !cleanupPerformed) {
-          // If join fails, attempt to clean up
-          leaveChannel();
-        }
-      });
-    }
+    isMountedRef.current = true
 
     return () => {
-      // Ensure cleanup only happens once
-      if (!cleanupPerformed) {
-        leaveChannel();
-        cleanupPerformed = true;
+      console.log("useAgora cleanup")
+      isMountedRef.current = false
+
+      // Clear timeout
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current)
+        joinTimeoutRef.current = null
       }
-    };
-  }, [channelName, joinChannel, leaveChannel]); // Dependencies for useEffect
+
+      // Don't destroy global engine on component unmount
+      // It will be reused by other components
+    }
+  }, [])
+
+  // Auto-join when channel name is provided
+  useEffect(() => {
+    if (!channelName) return
+
+    let cancelled = false
+
+    const attemptJoin = async () => {
+      // Add delay to prevent race conditions
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      if (cancelled || !isMountedRef.current) return
+
+      console.log("Auto-joining channel:", channelName)
+      const success = await joinChannel()
+
+      if (!success && !cancelled && isMountedRef.current) {
+        console.log("Auto-join failed, cleaning up")
+        await leaveChannel()
+      }
+    }
+
+    attemptJoin()
+
+    return () => {
+      cancelled = true
+    }
+  }, [channelName, joinChannel, leaveChannel])
 
   return {
     joined,
     remoteUsers,
     muted,
     speakerEnabled,
-    error, // Expose error state
-    joinChannel, // Expose for manual re-attempts if needed
+    error,
+    connectionState,
+    joinChannel,
     leaveChannel,
     toggleMute,
     toggleSpeaker,
   }
 }
-
-export default useAgora

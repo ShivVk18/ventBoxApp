@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useRef } from "react"
 import {
   View,
@@ -13,7 +11,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import GradientContainer from "../components/ui/GradientContainer"
 import StatusBar from "../components/ui/StatusBar"
@@ -31,20 +29,23 @@ export default function VentSubmittedScreen() {
   const insets = useSafeAreaInsets()
   const textInputRef = useRef(null)
 
+  const params = useLocalSearchParams()
+  const selectedPlan = params.selectedPlan || params.params
+
   const handleSubmitVent = async () => {
     const validation = validateVentText(ventText)
     if (!validation.isValid) {
       Alert.alert("Invalid Input", validation.error)
       return
     }
-    
+
     if (!userInfo?.uid) {
       Alert.alert("Error", "Please sign in to continue")
       return
     }
 
     Keyboard.dismiss()
-    const success = await startMatching("venter", ventText.trim())
+    const success = await startMatching("venter", ventText.trim(), selectedPlan)
 
     if (!success) {
       Alert.alert("Error", "Failed to start matching. Please try again.")

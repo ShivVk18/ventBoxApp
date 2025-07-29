@@ -2,7 +2,7 @@ export const theme = {
   colors: {
     primary: "#FFC940",
     primaryDark: "#E6B533",
-    primaryTransparent: "rgba(255, 201, 64, 0.15)", // ✅ Added
+    primaryTransparent: "rgba(255, 201, 64, 0.15)",
     secondary: "#4ade80",
     background: {
       primary: "#1a1a40",
@@ -14,7 +14,7 @@ export const theme = {
       secondary: "rgba(255, 255, 255, 0.8)",
       tertiary: "rgba(255, 255, 255, 0.6)",
       muted: "rgba(255, 255, 255, 0.4)",
-      dark: "#000000", // ✅ Added
+      dark: "#000000",
     },
     error: "#ef4444",
     warning: "#f59e0b",
@@ -22,7 +22,7 @@ export const theme = {
     info: "#3b82f6",
     overlay: "rgba(255, 255, 255, 0.1)",
     overlayStrong: "rgba(255, 255, 255, 0.2)",
-    border: "#3e3e5c", // optional: added for modal footer separator
+    border: "#3e3e5c",
   },
   spacing: {
     xs: 4,
