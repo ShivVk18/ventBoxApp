@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "73605309495",
+    "project_id": "ventbox-73392",
+    "storage_bucket": "ventbox-73392.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73605309495:android:f8a539a0dd6889452c4bb2",
+        "android_client_info": {
+          "package_name": "com.ventbox.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73605309495-uolhtna08ev00nge011f387btrbb4mtu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-wNAk7p6RkozOLimNPwj2WwpZrDez918"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73605309495-uolhtna08ev00nge011f387btrbb4mtu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73605309495:android:8cb20f91c38853f92c4bb2",
+        "android_client_info": {
+          "package_name": "ventApp.com.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "73605309495-uolhtna08ev00nge011f387btrbb4mtu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-wNAk7p6RkozOLimNPwj2WwpZrDez918"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "73605309495-uolhtna08ev00nge011f387btrbb4mtu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

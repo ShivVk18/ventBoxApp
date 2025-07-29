@@ -1,29 +1,70 @@
 {
   "expo": {
-    "name": "ventApp",
-    "slug": "ventApp",
+    "name": "VentBox",
+    "slug": "vent-box-app",
     "version": "1.0.0",
+    "owner": "shivanshvk2708",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.ventbox.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "VentBox needs microphone access for voice calls during vent sessions.",
+        "NSCameraUsageDescription": "VentBox may need camera access for future video features.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "package": "com.ventbox.app",
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow VentBox to access your microphone for voice calls."
+        }
+      ]
+    ],
+    "scheme": "ventbox",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7b2f052d-0601-4a31-9a57-012a16f01486"
+      },
+
+      "agoraAppId": "23b770c730a44a9d8bad353e5538a571"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7b2f052d-0601-4a31-9a57-012a16f01486"
     }
   }
 }

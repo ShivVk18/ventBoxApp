@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>73605309495-j1osep8u1e9a3iq0n044lstnm73nf7c7.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.73605309495-j1osep8u1e9a3iq0n044lstnm73nf7c7</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAsb0G3BaCY5bK5qvuq-kE6K4Z3k4d-Quo</string>
+	<key>GCM_SENDER_ID</key>
+	<string>73605309495</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.ventbox.app</string>
+	<key>PROJECT_ID</key>
+	<string>ventbox-73392</string>
+	<key>STORAGE_BUCKET</key>
+	<string>ventbox-73392.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:73605309495:ios:8b1a3e3f45b3cd6e2c4bb2</string>
+</dict>
+</plist>
