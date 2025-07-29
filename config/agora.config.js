@@ -8,7 +8,7 @@ import Constants from "expo-constants" // Import Constants for environment varia
 // It's highly recommended to store these in environment variables (e.g., .env file)
 // and expose them securely via Constants.manifest.extra or similar for Expo.
 // For demonstration, directly using it, but best practice is ENV.
-export const AGORA_APP_ID = Constants.manifest.extra.agoraAppId || "23b770c730a44a9d8bad353e5538a571" // Fallback or get from app.json/app.config.js extra section
+export const AGORA_APP_ID =  process.env.AGORA_APP_ID   
 
 export const agoraConfig = {
   appId: AGORA_APP_ID,

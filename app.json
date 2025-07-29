@@ -56,9 +56,8 @@
       },
       "eas": {
         "projectId": "7b2f052d-0601-4a31-9a57-012a16f01486"
-      },
+      }
 
-      "agoraAppId": "23b770c730a44a9d8bad353e5538a571"
     },
     "runtimeVersion": {
       "policy": "sdkVersion"

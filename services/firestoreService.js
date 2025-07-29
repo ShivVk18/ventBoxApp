@@ -1,7 +1,7 @@
 import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, query, where, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
-import { app } from '../config/firebase.config'; // Assuming your Firebase app is initialized here
-import { FIREBASE_COLLECTIONS } from '../utils/constants'; // Import constants
-import { generateChannelName } from '../config/agora.config'; // Import channel name generator
+import { app } from '../config/firebase.config'; 
+import { FIREBASE_COLLECTIONS } from '../utils/constants'; 
+import { generateChannelName } from '../config/agora.config'; 
 
 const db = getFirestore(app);
 
@@ -24,8 +24,7 @@ const firestoreService = {
         docData.ventText = ventText;
       }
 
-      // Add venter specific properties if needed (e.g., plan)
-      // docData.plan = plan; // If you pass plan to addToQueue
+      
 
       const docRef = await addDoc(queueRef, docData);
       console.log(`Firestore: Added ${userType} to queue with ID:`, docRef.id);

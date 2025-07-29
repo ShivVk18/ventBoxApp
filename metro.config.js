@@ -15,7 +15,7 @@ config.transformer.getTransformOptions = async () => ({
   },
 })
 
-// Ensure proper platform extensions
+
 config.resolver.platforms = ["native", "android", "ios", "web"]
 
 module.exports = config

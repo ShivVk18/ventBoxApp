@@ -62,7 +62,7 @@ export const NavigationProvider = ({ children }) => {
     [navigateReplace],
   )
 
-  // Flow-specific navigation helpers
+  
   const startVentingFlow = useCallback(
     (params = {}) => {
       navigateWithFlow(ROUTES.VENT_SUBMIT, params, "VENTING")

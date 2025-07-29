@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Platform, PermissionsAndroid, Alert } from "react-native"
 import RtcEngine, { ChannelProfile, ClientRole } from "react-native-agora"
-import { agoraConfig, generateAgoraToken } from "../config/agora"
+import { agoraConfig, generateAgoraToken } from "../config/agora.config"
 
 const useAgora = (channelName) => {
   const [joined, setJoined] = useState(false)
   const [remoteUsers, setRemoteUsers] = useState([])
   const [muted, setMuted] = useState(false)
   const [speakerEnabled, setSpeakerEnabled] = useState(true)
-  const [error, setError] = useState(null) // New state to track Agora errors
+  const [error, setError] = useState(null) 
   const engineRef = useRef(null)
 
   const requestPermissions = useCallback(async () => {
